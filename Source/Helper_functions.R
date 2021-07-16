@@ -52,6 +52,6 @@ medmod_plot <- function (data){
     geom_errorbarh(aes(xmin = l_CI, xmax = u_CI), height = 0.3) +
     theme_classic() +
     xlab("Indirect effect") +
-    ylab ("Condition") +
-    xlim(-0.1, 0.5)
+    xlim(-0.1, 0.5) + 
+    theme(axis.title.y = element_blank())
 }
