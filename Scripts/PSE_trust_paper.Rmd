@@ -73,10 +73,10 @@ Exp1_int <- Exp1.df %>%
 ## Determine if clustering exists for story ID and participants for the two DVs
 ```{r}
 # Willingness to help -- Model: ranova(lmer(help.response ~ (1|participant) + (1|Story_ID), data = Exp1.df)
-VE1.1 <- ranova(lmer(help.response ~ (1|participant) + (1|Story_ID), data = Exp1.df))
+(VE1.1 <- ranova(lmer(help.response ~ (1|participant) + (1|Story_ID), data = Exp1.df)))
 #---------------------------------------------------------------------------------------------------------------
 # Trust 
-VE1.2 <- ranova(lmer(trust.response ~ (1|participant) + (1|Story_ID), data = Exp1.df))
+(VE1.2 <- ranova(lmer(trust.response ~ (1|participant) + (1|Story_ID), data = Exp1.df)))
 ```
 
 ## PSE in willingness to help and trust towards the person in need
@@ -103,7 +103,7 @@ r.squaredGLMM(trust_exp1)
 ## Post hoc comparisons
 posthoc_trust1 <- emmeans(trust_exp1, pairwise ~ Condition, adjust = 'bonferroni') #####
 posthoc_trust1
-confint(posthoc_help1)
+confint(posthoc_trust1)
 ```
 #### Plots: Figure .....
 ```{r}
@@ -149,9 +149,8 @@ r.squaredGLMM(help_coh_exp1)
 
 ### Trust 
 ```{r}
-# Detail -- Parsimonious model: lmer(trust.response ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (0 + dummy_img|Story_ID), data = Exp1_int)
-trust_det_exp1 <- lmer (trust.response ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (0 + dummy_img|Story_ID), data = Exp1_int)
-trust_det_exp1 <- refit_LMM(trust_det_exp1) 
+# Detail -- Parsimonious model: lmer(trust.response ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (1|Story_ID), data = Exp1_int)
+trust_det_exp1 <- lmer (trust.response ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (1|Story_ID), data = Exp1_int)
 # Confidence intervals
 confint(trust_det_exp1, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
@@ -159,7 +158,7 @@ anova(trust_det_exp1, ddf = 'Kenward-Roger'); summary(trust_det_exp1)
 # Effect Size
 r.squaredGLMM(trust_det_exp1)
 #---------------------------------------------------------------------------------------------------------------------------
-# Coherence -- Parsimonious model: lmer(trust.response ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (0 + dummy_img|Story_ID), data = Exp1_int)
+# Coherence -- Parsimonious model: lmer(trust.response ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (1|Story_ID), data = Exp1_int)
 trust_coh_exp1 <- lmer (trust.response ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (0 + dummy_img|Story_ID), data = Exp1_int) 
 trust_coh_exp1 <- refit_LMM(trust_coh_exp1)
 # Confidence intervals
@@ -212,28 +211,26 @@ grid.arrange(det_trust_plot1, coh_trust_plot1, ncol = 2)
 ## Condition -> Help -> Trust
 ```{r}
 # Path a
-## Identify vs Imagine -- Model: lmer(help.response ~ dummy_est + dummy_img + (dummy_est + dummy_img|participant), data = Exp1.df)
-med.fit_0v2_exp1 <- lmer(help.response ~ dummy_est + dummy_img + (dummy_est + dummy_img|participant), data = Exp1.df)
-## Conceptual vs Imagine -- Model: lmer(help.response ~ dummy_ident + dummy_img + (dummy_img + dummy_ident|participant), data = Exp1.df)
-med.fit_1v2_exp1 <- lmer(help.response ~ dummy_ident + dummy_img + (dummy_img + dummy_ident|participant), data = Exp1.df)
-summary(med.fit_0v2_exp1); summary(med.fit_1v2_exp1)
+## Model: lmer(help.response ~ Condition + (dummy_est + dummy_img|participant), data = Exp1.df)
+med.fit_exp1 <- lmer(help.response ~ Condition + (dummy_est + dummy_img|participant), data = Exp1.df)
+summary(med.fit_exp1)
 
 # Path b and c'
-## Identify vs Imagine -- Model: lmer(trust.response ~ dummy_est + dummy_img + Help_C + (Help_C|participant), data = Exp1.df)
-out.fit_0v2_exp1 <- lmer(trust.response ~ dummy_est + dummy_img + Help_C + (Help_C|participant), data = Exp1.df)
-## Conceptual vs Imagine -- Model: lmer(trust.response ~ dummy_ident + dummy_img + Help_C + (Help_C|participant), data = Exp1.df)
-out.fit_1v2_exp1 <- lmer(trust.response ~ dummy_ident + dummy_img + Help_C + (Help_C|participant), data = Exp1.df)
-summary(out.fit_0v2_exp1); summary(out.fit_1v2_exp1)
+## Model: lmer(trust.response ~ Condition + Help_C + (Help_C|participant), data = Exp1.df)
+out.fit_exp1 <- lmer(trust.response ~ Condition + Help_C + (Help_C|participant), data = Exp1.df)
+summary(out.fit_exp1)
 #-----------------------------------------------------------------------------------------------------------------------------------------
 # Mediaton models
 ## Identify vs Imagine
-set.seed(67); med.out_0v2_exp1 <- mediate(med.fit_0v2_exp1, out.fit_0v2_exp1, 
-                                          treat = 'dummy_img', mediator = 'Help_C', sims = 1e5)
-summary(med.out_0v2_exp1); plot(med.out_0v2_exp1)
+set.seed(67); med.out_0v2_exp1 <- mediate(med.fit_exp1, out.fit_exp1, 
+                                          treat = 'Condition', mediator = 'Help_C', control.value = 'Identify',
+                                          treat.value = 'Imagine', sims = 1e5)
+summary(med.out_0v2_exp1)
 ## Conceptual vs Imagine
-set.seed(67); med.out_1v2_exp1 <- mediate(med.fit_1v2_exp1, out.fit_1v2_exp1, 
-                                          treat = 'dummy_img', mediator = 'Help_C', sims = 1e5)
-summary(med.out_1v2_exp1); plot(med.out_1v2_exp1)
+set.seed(67); med.out_1v2_exp1 <- mediate(med.fit_exp1, out.fit_exp1, 
+                                          treat = 'Condition', mediator = 'Help_C', control.value = 'Conceptual',
+                                          treat.value = 'Imagine', sims = 1e5)
+summary(med.out_1v2_exp1)
 ```
 
 
@@ -467,10 +464,10 @@ Exp2.df <- Exp2.df %>%
 ## Determine if clustering exist for story ID and participants for thee two DV
 ```{r}
 # Help
-VE2.1 <- ranova(lmer(Help ~ (1|participant) + (1|Story_ID), data = Exp2.df))
+(VE2.1 <- ranova(lmer(Help ~ (1|participant) + (1|Story_ID), data = Exp2.df)))
 #---------------------------------------------------------------------------------------------------------------
 # Trust 
-VE1.2 <- ranova(lmer(Trust ~ (1|participant) + (1|Story_ID), data = Exp2.df))
+(VE1.2 <- ranova(lmer(Trust ~ (1|participant) + (1|Story_ID), data = Exp2.df)))
 
 # Determine if ordering of help and trust rating matters
 summary(lmer(Help ~ help_trust + (1|participant) + (1|Story_ID), data = Exp2.df))
@@ -621,18 +618,18 @@ grid.arrange(det_trust_plot2, coh_trust_plot2, ncol = 2)
 ```{r}
 # Path a
 ## Model: lmer(Help ~ dummy_img + (dummy_img|participant), data = Exp2.df)
-med.fit_0v1_exp2 <- lmer(Help ~ dummy_img + (dummy_img|participant), data = Exp2.df)
-summary(med.fit_0v1_exp2)
+med.fit_exp2 <- lmer(Help ~ dummy_img + (dummy_img|participant), data = Exp2.df)
+summary(med.fit_exp2)
 # Path b and c'
 ## Model: lmer(Trust ~ dummy_img + Help_C + (dummy_img + Help_C|participant), data = Exp2.df)
-out.fit_0v1_exp2 <- lmer(Trust ~ dummy_img + Help_C + (dummy_img + Help_C|participant), data = Exp2.df)
-summary(out.fit_0v1_exp2)
+out.fit_exp2 <- lmer(Trust ~ dummy_img + Help_C + (dummy_img + Help_C|participant), data = Exp2.df)
+summary(out.fit_exp2)
 #------------------------------------------------------------------------------------------------------------------------
 # Mediaton models
 ## Conceeptual vs Imagine
-set.seed(67); med.out_0v1_exp2 <- mediate (med.fit_0v1_exp2, out.fit_0v1_exp2, treat = 'dummy_img', mediator = 'Help_C',
-                                          sims = 1e5)
-summary(med.out_0v1_exp2); plot(med.out_0v1_exp2)
+set.seed(67); med.out_exp2 <- mediate (med.fit_0v1_exp2, out.fit_0v1_exp2, 
+                                           treat = 'dummy_img', mediator = 'Help_C', sims = 1e5)
+summary(med.out_exp2)
 ```
 
 
@@ -861,7 +858,7 @@ ggpredict(pos_recip, c("Reciprocity_Pos_C", "Condition"))%>% plot() +
   labs(title = "", x="Positive Reciprocity", y = "Trust") 
 #-----------------------------------------------------------------------------------------------------------------------
 # Negative reciprocity -- Model: lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-neg_recip <- lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
+neg_recip <- lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.d f)
 neg_recip <- refit_LMM(neg_recip)
 # Confidence intervals
 confint(neg_recip, c("ConditionImagine", "Reciprocity_Neg_C", "ConditionImagine:Reciprocity_Neg_C"))
@@ -872,18 +869,20 @@ r.squaredGLMM(neg_recip)
 emtrends(neg_recip, pairwise ~ Condition, var = 'Reciprocity_Neg_C')
 ```
 
-
-
-
-
-
+#### Power
 ```{r}
-m1 <- lmer(trust.response ~ Condition*Help_C + (1|participant) + (1|Story_ID), data = Exp1_int)
-summary(m1)
+library (simr)
+m1 <- extend(belief, along = 'participant', n = 150)
+set.seed(67); pcurve_belief <- powerCurve(m1, test = fcompare(Trust ~ Condition + Belief_C), along = 'participant')
+plot(pcurve_belief)
+set.seed(67); power_belief <- powerSim(belief, test = fcompare(Trust ~ Condition + Belief_C, method = 'kr'))
 
-m2 <- lmer(Trust ~ Condition*Help_C + (1|participant) + (1|Story_ID), data = Exp2.df)
-summary(m2)
+m2 <- extend(pos_recip, along = 'participant', n = 150)
+set.seed(67); pcurve_posrecip <- powerCurve(m2, test = fcompare(Trust ~ Condition + Reciprocity_Pos_C), along = 'participant')
+plot(pcurve_posrecip)
+set.seed(67); power_posrecip <- powerSim(pos_recip, test = fcompare(Trust ~ Condition + Reciprocity_Pos_C, method = 'kr'))
 ```
+
 
 
 
