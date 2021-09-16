@@ -23,7 +23,8 @@ rm(list = ls()); gc()
 ```{r setup, include=FALSE}
 # Load packages
 if (!require(pacman)) install.packages('pacman')
-pacman::p_load (sjstats, sjPlot, MuMIn, lme4, lmerTest, lattice, mediation, emmeans, ggeffects, reshape, tidyverse, ggplot2, gridExtra)
+pacman::p_load (sjstats, sjPlot, MuMIn, lme4, lmerTest, lattice, mediation, emmeans, 
+                ggeffects, reshape, tidyverse, ggplot2, gridExtra, simr)
 
 # Set working directory
 setwd('C:/Users/dpen466/Google Drive/Phd (1)/PhD_writing/IPET_paper/Results/Analysis/PSE_trust_paper/')
@@ -39,69 +40,65 @@ palette <- c("#eeaa7b", "#00b159", "#00aedb", "#F8766D", "#9590FF", "#CC9933", "
 ##Data setup
 ```{r}
 # Loading data and transformation 
-Exp1.df <- read.csv('../IPET_fulldata_N=30.csv', header = T) %>% 
-                # Remove missing data
-                filter(complete.cases(Condition)) %>% 
-                # Recode condition variable
-                mutate(Condition = recode(Condition, '0' = 'Identify', '1' = 'Conceptual', '2' = 'Imagine'),
-                       Condition = relevel(as.factor(Condition), ref = 'Identify'),
-                       # Convert Scenario ID to factors
-                       Story_ID = as.factor(Story_ID),
-                       # Create dummy variables
-                       dummy_ident = as.numeric(Condition == 'Identify'),
-                       dummy_img = as.numeric(Condition == 'Imagine'),
-                       dummy_est = as.numeric(Condition == 'Conceptual'),
-                       # Within-cluster centering
-                       Coherence_C = group_center(Coherence.response, participant),
-                       Detail_C = group_center(Detail.response, participant),
-                       Help_C = group_center(help.response, participant),
-                       Trust_C = group_center(trust.response, participant))
+# Exp1.df <- read.csv('../IPET_fulldata_N=30.csv', header = T) %>% 
+#                 # Remove missing data
+#                 filter(complete.cases(Condition)) %>% 
+#                 # Recode condition variable
+#                 mutate(Condition = recode(Condition, '0' = 'Identify', '1' = 'Conceptual', '2' = 'Imagine'),
+#                        Condition = relevel(as.factor(Condition), ref = 'Identify'),
+#                        # Convert Scenario ID to factors
+#                        Story_ID = as.factor(Story_ID),
+#                        # Create dummy variables
+#                        dummy_ident = as.numeric(Condition == 'Identify'),
+#                        dummy_img = as.numeric(Condition == 'Imagine'),
+#                        dummy_est = as.numeric(Condition == 'Conceptual'),
+#                        # Within-cluster centering
+#                        Coherence_C = group_center(Coherence.response, participant),
+#                        Detail_C = group_center(Detail.response, participant),
+#                        Help_C = group_center(help.response, participant),
+#                        Trust_C = group_center(trust.response, participant))
 
 # Create data with Estimate and Imagine helping conditons only
-Exp1_int <- Exp1.df %>%
-                   filter(Condition!='Identify')%>%
-                   mutate(Help_C = group_center(help.response,participant),
-                          Trust_C = group_center(trust.response, participant),
-                          Condition = droplevels(Condition),
-                          imgdet_int = dummy_img*Detail_C,
-                          imgcoh_int = dummy_img*Coherence_C)
+# Exp1_int <- Exp1.df %>%
+#                    filter(Condition!='Identify')%>%
+#                    mutate(Help_C = group_center(help.response,participant),
+#                           Trust_C = group_center(trust.response, participant),
+#                           Condition = droplevels(Condition),
+#                           imgdet_int = dummy_img*Detail_C,
+#                           imgcoh_int = dummy_img*Coherence_C)
 
 # Models
-# load('Exp1_models.Rdata')
+load('Exp1.Rdata')
 ```
 
 ## Determine if clustering exists for story ID and participants for the two DVs
 ```{r}
 # Willingness to help -- Model: ranova(lmer(help.response ~ (1|participant) + (1|Story_ID), data = Exp1.df)
-(VE1.1 <- ranova(lmer(help.response ~ (1|participant) + (1|Story_ID), data = Exp1.df)))
+VE1.1
 #---------------------------------------------------------------------------------------------------------------
-# Trust 
-(VE1.2 <- ranova(lmer(trust.response ~ (1|participant) + (1|Story_ID), data = Exp1.df)))
+# Trust -- Model: ranova(lmer(trust.response~ (1|participant) + (1|Story_ID), data = Exp1.df)
+VE1.2
 ```
 
 ## PSE in willingness to help and trust towards the person in need
 ```{r}
 # Willingness to help
 ## Parsimonious model: lmer(help.response ~ Condition + (dummy_est + dummy_img|participant) + (1|Story_ID), data = Exp1.df)
-help_exp1 <- lmer(help.response ~ Condition + (dummy_est + dummy_img|participant) + (1|Story_ID), data = Exp1.df) #####
 ## F-test with Kenward-Roger approximation of degress of freedom
 anova(help_exp1, ddf = 'Kenward-Roger')
 ## Effect Size
 r.squaredGLMM(help_exp1)
 ## Post hoc comparisons
-posthoc_help1 <- emmeans(help_exp1, pairwise ~ Condition, adjust = 'bonferroni') #####
 posthoc_help1
 confint(posthoc_help1)
 #----------------------------------------------------------------------------------------------------------------------------
 # Trust
 ## Parsimonious model: lmer(trust.response ~ Condition + (dummy_img|participant)+(dummy_img|Story_ID), data = Exp1.df)
-trust_exp1 <- lmer(trust.response ~ Condition + (dummy_img|participant) + (dummy_img|Story_ID), data = Exp1.df)
 ## F-test with Kenward-Roger approximation of degress of freedom
 anova(trust_exp1, ddf = 'Kenward-Roger')
 ## Effect Size
 r.squaredGLMM(trust_exp1)
 ## Post hoc comparisons
-posthoc_trust1 <- emmeans(trust_exp1, pairwise ~ Condition, adjust = 'bonferroni') #####
 posthoc_trust1
 confint(posthoc_trust1)
 ```
@@ -111,15 +108,17 @@ confint(posthoc_trust1)
 means_help1 <- data.frame(posthoc_help1$emmeans)
 colnames(means_help1)[1] <- "Conditions"
 bar_plot(means_help1, palette) + 
-  scale_x_discrete(labels = c("Identify Media Source", "Conceptual Helping", "Imagine Helping")) +
+  scale_x_discrete(limits = c("Imagine", "Conceptual", "Identify"),
+                   labels = c("Imagine Helping", "Conceptual Helping", "Identify Media Source")) +
   xlab ("Condition")
 #------------------------------------------------------------------------------------------------------------------------
 # Trust
 means_trust1 <- data.frame(posthoc_trust1$emmeans)
 colnames(means_trust1)[1] <- "Conditions"
 bar_plot(means_trust1, palette) + 
-  scale_x_discrete(labels = c("Identify Media Source", "Conceptual Helping", "Imagine Helping")) +
-  xlab ("Condition") +
+  xlab ("Condition") + 
+  scale_x_discrete(limits = c("Imagine", "Conceptual", "Identify"),
+                   labels = c("Imagine Helping", "Conceptual Helping", "Identify Media Source")) +
   ylab ("Trust")
 ```
 
@@ -128,21 +127,18 @@ bar_plot(means_trust1, palette) +
 ### Willingness to help
 ```{r}
 # Detail -- Parsimonious model: lmer(help.response ~ Condition*Detail_C + (dummy_img + dummy_img:Detail_C|participant) + (1|Story_ID), data = Exp1_int)
-help_det_exp1 <- lmer(help.response ~ Condition*Detail_C + (dummy_img + dummy_img:Detail_C|participant) + (1|Story_ID),data = Exp1_int)
-help_det_exp1 <- refit_LMM(help_det_exp1)
-# Confidence intervals
-confint(help_det_exp1, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(help_det_exp1, ddf = 'Kenward-Roger'); summary(help_det_exp1)
+# Confidence intervals
+confint(help_det_exp1, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # Effect Size
 r.squaredGLMM(help_det_exp1)
 #-------------------------------------------------------------------------------------------------------------------------------------
 # Coherence -- Parsimonious model: lmer (help.response ~ Condition*Coherence_C + (dummy_img|participant) + (Coherence_C|Story_ID), data = Exp1_int)
-help_coh_exp1 <- lmer(help.response ~ Condition*Coherence_C + (dummy_img|participant) + (Coherence_C|Story_ID), data = Exp1_int)
-# Confidence intervals
-confint(help_coh_exp1, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(help_coh_exp1, ddf = 'Kenward-Roger'); summary(help_coh_exp1)
+# Confidence intervals
+confint(help_coh_exp1, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # Effect Size
 r.squaredGLMM(help_coh_exp1)
 ```
@@ -150,21 +146,18 @@ r.squaredGLMM(help_coh_exp1)
 ### Trust 
 ```{r}
 # Detail -- Parsimonious model: lmer(trust.response ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (1|Story_ID), data = Exp1_int)
-trust_det_exp1 <- lmer (trust.response ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (1|Story_ID), data = Exp1_int)
-# Confidence intervals
-confint(trust_det_exp1, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(trust_det_exp1, ddf = 'Kenward-Roger'); summary(trust_det_exp1)
+# Confidence intervals
+confint(trust_det_exp1, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # Effect Size
 r.squaredGLMM(trust_det_exp1)
 #---------------------------------------------------------------------------------------------------------------------------
-# Coherence -- Parsimonious model: lmer(trust.response ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (1|Story_ID), data = Exp1_int)
-trust_coh_exp1 <- lmer (trust.response ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (0 + dummy_img|Story_ID), data = Exp1_int) 
-trust_coh_exp1 <- refit_LMM(trust_coh_exp1)
-# Confidence intervals
-confint(trust_coh_exp1, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
+# Coherence -- Parsimonious model: lmer(trust.response ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (0 + dummy_img|Story_ID), data = Exp1_int)
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(trust_coh_exp1, ddf = 'Kenward-Roger'); summary(trust_coh_exp1)
+# Confidence intervals
+confint(trust_coh_exp1, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # Effect Size
 r.squaredGLMM(trust_coh_exp1)
 ```
@@ -182,9 +175,8 @@ det_help_plot1 <- int_plot(plot_det_help1, DV_name = 'Willingness to help', x_na
 ## Coherence: Figure
 plot_coh_help1 <- ggpredict(help_coh_exp1, c("Coherence_C[-4, 0, 4]", "Condition"))
 coh_help_plot1 <- int_plot(plot_coh_help1, DV_name = 'Willingness to help', x_name = 'Coherence', 
-                           palette = c(palette[2], palette[3]))  
-                          #theme(legend.position = "none") +
-                          #ylab('')
+                           palette = c(palette[2], palette[3])) + 
+                           ylab('')
 
 grid.arrange(det_help_plot1, coh_help_plot1, ncol = 2)
 #----------------------------------------------------------------------------------------------------------------------------
@@ -199,25 +191,19 @@ det_trust_plot1 <- int_plot(plot_det_trust1, DV_name = 'Trust', x_name = 'Detail
 plot_coh_trust1 <- ggpredict(trust_coh_exp1, c("Coherence_C[-4, 0, 4]", "Condition"))
 coh_trust_plot1 <- int_plot(plot_coh_trust1, DV_name = 'Trust', x_name = 'Coherence', 
                             palette = c(palette[2], palette[3])) +
-                            #theme(legend.position = "none") +
-                            #ylab('')
+                            ylab('')
 
 grid.arrange(det_trust_plot1, coh_trust_plot1, ncol = 2)
 ```
-
-
-
 # Multilevel mediations 
 ## Condition -> Help -> Trust
 ```{r}
 # Path a
 ## Model: lmer(help.response ~ Condition + (dummy_est + dummy_img|participant), data = Exp1.df)
-med.fit_exp1 <- lmer(help.response ~ Condition + (dummy_est + dummy_img|participant), data = Exp1.df)
 summary(med.fit_exp1)
 
 # Path b and c'
 ## Model: lmer(trust.response ~ Condition + Help_C + (Help_C|participant), data = Exp1.df)
-out.fit_exp1 <- lmer(trust.response ~ Condition + Help_C + (Help_C|participant), data = Exp1.df)
 summary(out.fit_exp1)
 #-----------------------------------------------------------------------------------------------------------------------------------------
 # Mediaton models
@@ -234,268 +220,83 @@ summary(med.out_1v2_exp1)
 ```
 
 
-# Multilevel moderated mediation 
-## Vividness -> Help -> Trust
-```{r}
-library(lmerTest)
-detach (package:lmerTest, unload=T)
-#---------------------------------------------------------------------------------------------------------------------------
-# Detail -- Models:
-## Path a: lmer (help.response~dummy_img*Detail_C + (dummy_img + imgdet_int|participant), data = Exp1_int) 
-med.fit_DH_exp1 <- lmer (help.response ~ dummy_img*Detail_C + (dummy_img + imgdet_int|participant), data = Exp1_int) 
-## Path b and c': lmer (trust.response ~ dummy_img*(Detail_C + Help_C) + (Detail_C + Help_C|participant), data = Exp1_int)
-out.fit_DH_exp1 <- lmer (trust.response ~ dummy_img*(Detail_C + Help_C) + (Detail_C + Help_C|participant), data = Exp1_int)
 
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgDH_exp1 <- mediate(med.fit_DH_exp1, out.fit_DH_exp1,
-                                            covariates = list(dummy_img = 1), treat = "Detail_C", mediator = "Help_C", 
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estDH_exp1 <- mediate(med.fit_DH_exp1, out.fit_DH_exp1, 
-                                            covariates = list(dummy_img = 0), treat = "Detail_C", mediator = "Help_C", 
-                                            sims = 1e5)
-summary(Mod.Med_estDH_exp1); summary(Mod.Med_imgDH_exp1)
-
-# Used to plot paths a & b for each condition 
-est_DHa_exp1 <- lmer (help.response ~ Detail_C + (1|participant), data = subset(Exp1_int, Condition == 'Conceptual')) 
-img_DHa_exp1 <- lmer (help.response ~ Detail_C + (Detail_C|participant),data = subset(Exp1_int, Condition == 'Imagine')) 
-est_DHb_exp1 <- lmer (trust.response ~ Detail_C + Help_C + (Detail_C + Help_C|participant), 
-                      data = subset(Exp1_int, Condition == 'Conceptual')) 
-est_DHb_exp1 <- refit_LMM(est_DHb_exp1)
-img_DHb_exp1 <- lmer (trust.response ~ Detail_C + Help_C + (Detail_C + Help_C|participant), 
-                      data = subset(Exp1_int, Condition == 'Imagine'))
-img_DHb_exp1 <- refit_LMM (img_DHb_exp1)
-summary(est_DHa_exp1);summary(est_DHb_exp1);summary(img_DHa_exp1);summary(img_DHb_exp1)
-#--------------------------------------------------------------------------------------------------------------------------
-# Coherence -- Models:
-## Path a: lmer(help.response ~ dummy_img*Coherence_C + (dummy_img|participant), data = Exp1_int) 
-med.fit_CH_exp1 <- lmer(help.response ~ dummy_img*Coherence_C + (dummy_img|participant), data = Exp1_int) 
-## Path b and c': lmer(trust.response ~ dummy_img*(Coherence_C + Help_C) + (Coherence_C + Help_C|participant), data = Exp1_int)
-out.fit_CH_exp1 <- lmer(trust.response ~ dummy_img*(Coherence_C + Help_C) + (Coherence_C + Help_C|participant), 
-                        data = Exp1_int)
-summary(out.fit_CH_exp1)
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgCH_exp1 <- mediate(med.fit_CH_exp1, out.fit_CH_exp1,
-                                            covariates = list(dummy_img = 1), treat = "Coherence_C", mediator = "Help_C",
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estCH_exp1 <- mediate(med.fit_CH_exp1, out.fit_CH_exp1, 
-                                            covariates = list(dummy_img = 0), treat = "Coherence_C", mediator = "Help_C",
-                                            sims = 1e5)
-summary(Mod.Med_estCH_exp1); summary(Mod.Med_imgCH_exp1)
-
-# Used to plot paths a & b for each condition 
-est_CHa_exp1 <- lmer (help.response ~ Coherence_C + (1|participant), data = subset(Exp1_int, Condition == 'Conceptual')) 
-img_CHa_exp1 <- lmer (help.response ~ Coherence_C + (Coherence_C|participant), 
-                      data = subset(Exp1_int, Condition == 'Imagine')) 
-est_CHb_exp1 <- lmer (trust.response ~ Coherence_C + Help_C + (Coherence_C+Help_C|participant),
-                      data = subset(Exp1_int, Condition == 'Conceptual')) 
-est_CHb_exp1 <- refit_LMM(est_CHb_exp1)
-img_CHb_exp1 <- lmer (trust.response ~ Coherence_C + Help_C + (Help_C|participant), 
-                      data = subset(Exp1_int, Condition == 'Imagine'))
-summary(est_CHa_exp1); summary(est_CHb_exp1); summary(img_CHa_exp1); summary(img_CHb_exp1)
-```
-### Plot: Figure...
-```{r}
-# Generate data file for ploting 
-medmod_H_exp1.df <- cbind.data.frame("Vividness" = c('Detail', 'Detail', 'Coherence', 'Coherence'),
-                                     "Condition" = c("Imagine Helping", 
-                                                     "Conceptual Helping",
-                                                     "Imagine Helping", 
-                                                     "Conceptual Helping"), 
-                                     "IE" = c(Mod.Med_imgDH_exp1$d0, 
-                                              Mod.Med_estDH_exp1$d0, 
-                                              Mod.Med_imgCH_exp1$d0, 
-                                              Mod.Med_estCH_exp1$d0),
-                                     "l_CI" = c(Mod.Med_imgDH_exp1$d0.ci[1], 
-                                                Mod.Med_estDH_exp1$d0.ci[1], 
-                                                Mod.Med_imgCH_exp1$d0.ci[1], 
-                                                Mod.Med_estCH_exp1$d0.ci[1]), 
-                                     "u_CI" = c(Mod.Med_imgDH_exp1$d0.ci[2], 
-                                                Mod.Med_estDH_exp1$d0.ci[2], 
-                                                Mod.Med_imgCH_exp1$d0.ci[2], 
-                                                Mod.Med_estCH_exp1$d0.ci[2]))
-
-# Detail
-medmod_detH_plot1 <- medmod_plot(subset(medmod_H_exp1.df, Vividness == 'Detail'))
-# Coherence
-medmod_cohH_plot1 <- medmod_plot(subset(medmod_H_exp1.df, Vividness == 'Coherence'))
-
-grid.arrange(medmod_detH_plot1, medmod_cohH_plot1, ncol = 2)
-```
-
-## Vividness -> Trust -> Help
-```{r}
-library(lmerTest)
-detach (package:lmerTest, unload=T)
-#----------------------------------------------------------------------------------------------------------------------------
-# Detail -- Models:
-## Path a: lmer(trust.response ~ dummy_img*Detail_C + (dummy_img + Detail_C|participant), data = Exp1_int)
-med.fit_DT_exp1 <- lmer(trust.response ~ dummy_img*Detail_C + (dummy_img + Detail_C|participant), data = Exp1_int) 
-## Path b and c': lmer(help.response ~ dummy_img*(Detail_C + Trust_C) + (dummy_img + Trust_C|participant), data = Exp1_int)
-out.fit_DT_exp1 <- lmer(help.response~dummy_img*(Detail_C+Trust_C)+(dummy_img  +Trust_C|participant),data = Exp1_int)
-out.fit_DT_exp1 <- refit_LMM(out.fit_DT_exp1)
-
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgDT_exp1 <- mediate(med.fit_DT_exp1, out.fit_DT_exp1,
-                                            covariates = list(dummy_img = 1), treat = "Detail_C", mediator = "Trust_C",
-                                            sims = 1e5)
-# Conceptual helping
-set.seed(67); Mod.Med_estDT_exp1 <- mediate(med.fit_DT_exp1, out.fit_DT_exp1, 
-                                            covariates = list(dummy_img = 0), treat = "Detail_C", mediator = "Trust_C",
-                                            sims = 1e5)
-summary(Mod.Med_estDT_exp1); summary(Mod.Med_imgDT_exp1)
-
-# Used to plot paths a & b for each condition 
-est_DTa_exp1 <- lmer(trust.response ~ Detail_C + (1|participant), data = subset(Exp1_int, Condition == 'Conceptual')) 
-img_DTa_exp1 <- lmer(trust.response ~ Detail_C + (Detail_C|participant), data = subset(Exp1_int, Condition == 'Imagine')) 
-est_DTb_exp1 <- lmer(help.response ~ Detail_C + Trust_C + (Trust_C|participant),
-                      data = subset(Exp1_int, Condition == 'Conceptual')) 
-img_DTb_exp1 <- lmer(help.response ~ Detail_C + Trust_C + (Detail_C + Trust_C|participant), 
-                     data = subset(Exp1_int, Condition == 'Imagine'))
-summary(est_DTa_exp1); summary(est_DTb_exp1); summary(img_DTa_exp1); summary(img_DTb_exp1)
-#----------------------------------------------------------------------------------------------------------------------------
-# Coherence -- Models:
-## Path a: lmer(trust.response~ dummy_img*Coherence_C + (Coherence_C|participant), data = Exp1_int) 
-med.fit_CT_exp1 <- lmer(trust.response ~ dummy_img*Coherence_C + (Coherence_C|participant), data = Exp1_int) 
-## Path b and c':lmer(help.response ~ dummy_img*(Coherence_C + Trust_C) + (dummy_img + Trust_C|participant), data = Exp1_int)
-out.fit_CT_exp1 <- lmer (help.response ~ dummy_img*(Coherence_C + Trust_C) + (dummy_img + Trust_C|participant),
-                         data = Exp1_int)
-
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgCT_exp1 <- mediate(med.fit_CT_exp1, out.fit_CT_exp1,
-                                            covariates = list(dummy_img = 1), treat = "Coherence_C", mediator = "Trust_C",
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estCT_exp1 <- mediate(med.fit_CT_exp1, out.fit_CT_exp1, 
-                                            covariates = list(dummy_img = 0), treat = "Coherence_C", mediator = "Trust_C",
-                                            sims = 1e5)
-summary(Mod.Med_estCT_exp1); summary(Mod.Med_imgCT_exp1)
-
-# Used to plot paths a & b for each condition 
-est_CTa_exp1 <- lmer(trust.response ~ Coherence_C + (1|participant), data = subset(Exp1_int, Condition == 'Conceptual')) 
-img_CTa_exp1 <- lmer(trust.response ~ Coherence_C + (1|participant), data = subset(Exp1_int, Condition == 'Imagine')) 
-est_CTb_exp1 <- lmer(help.response ~ Coherence_C + Trust_C + (Trust_C|participant), 
-                     data = subset(Exp1_int, Condition == 'Conceptual')) 
-img_CTb_exp1 <- lmer(help.response ~ Coherence_C + Trust_C + (1|participant),
-                     data = subset(Exp1_int, Condition == 'Imagine'))
-
-summary(est_CTa_exp1); summary(est_CTb_exp1); summary(img_CTa_exp1); summary(img_CTb_exp1)
-```
-### Plot: Figure...
-```{r}
-# Generate data file for ploting 
-medmod_T_exp1.df <- cbind.data.frame("Vividness" = c('Detail', 'Detail', 'Coherence', 'Coherence'),
-                                     "Condition" = c("Imagine Helping", 
-                                                     "Conceptual Helping",
-                                                     "Imagine Helping", 
-                                                     "Conceptual Helping"), 
-                                     "IE" = c(Mod.Med_imgDT_exp1$d0, 
-                                              Mod.Med_estDT_exp1$d0, 
-                                              Mod.Med_imgCT_exp1$d0, 
-                                              Mod.Med_estCT_exp1$d0),
-                                     "l_CI" = c(Mod.Med_imgDT_exp1$d0.ci[1], 
-                                                Mod.Med_estDT_exp1$d0.ci[1], 
-                                                Mod.Med_imgCT_exp1$d0.ci[1], 
-                                                Mod.Med_estCT_exp1$d0.ci[1]), 
-                                     "u_CI" = c(Mod.Med_imgDT_exp1$d0.ci[2], 
-                                                Mod.Med_estDT_exp1$d0.ci[2], 
-                                                Mod.Med_imgCT_exp1$d0.ci[2], 
-                                                Mod.Med_estCT_exp1$d0.ci[2]))
-
-# Detail
-medmod_detT_plot1 <- medmod_plot(subset(medmod_T_exp1.df, Vividness == 'Detail'))
-# Coherence
-medmod_cohT_plot1 <- medmod_plot(subset(medmod_T_exp1.df, Vividness == 'Coherence')) 
-                               
-
-grid.arrange(medmod_detT_plot1 + xlim(-0.1, 0.3), medmod_cohT_plot1 + xlim(-0.1, 0.3), ncol = 2)
-```
 
 # Experiment 2
 ## Data setup
 
 ```{r}
 # Load personal norm of reciprocity questionnaire (PNQR) 
-Exp2.PNQR <- read.csv('../IPET2_PNRQ_Clean.csv', header = T) %>% 
-              mutate(
-                # Create composite score for each component
-                Belief = (Item1 + Item2 + Item3 + Item4 + Item5 + Item6 + Item7 + Item8)/8,
-                Reciprocity_Neg = (Item10 + Item11 + Item12 + Item13 + Item14 + Item15 + Item16 + Item17 + Item18)/9,
-                Reciprocity_Pos = (Item19 + Item20 + Item21 + Item22 + Item23 + Item24 + Item25 + Item26 + Item27)/9,
-                # Grand mean centring for each participant
-                Belief_C = Belief - mean(Belief,na.rm = T),
-                Reciprocity_Neg_C = Reciprocity_Neg - mean(Reciprocity_Neg, na.rm = T),
-                Reciprocity_Pos_C = Reciprocity_Pos - mean(Reciprocity_Pos, na.rm = T))
+# Exp2.PNQR <- read.csv('../IPET2_PNRQ_Clean.csv', header = T) %>% 
+#               mutate(
+#                 # Create composite score for each component
+#                 Belief = (Item1 + Item2 + Item3 + Item4 + Item5 + Item6 + Item7 + Item8)/8,
+#                 Reciprocity_Neg = (Item10 + Item11 + Item12 + Item13 + Item14 + Item15 + Item16 + Item17 + Item18)/9,
+#                 Reciprocity_Pos = (Item19 + Item20 + Item21 + Item22 + Item23 + Item24 + Item25 + Item26 + Item27)/9,
+#                 # Grand mean centring for each participant
+#                 Belief_C = Belief - mean(Belief,na.rm = T),
+#                 Reciprocity_Neg_C = Reciprocity_Neg - mean(Reciprocity_Neg, na.rm = T),
+#                 Reciprocity_Pos_C = Reciprocity_Pos - mean(Reciprocity_Pos, na.rm = T))
 
 # Loading data and data Tranformation
-Exp2.df <- read.csv('../IPET2_fulldata_N=40.csv', header = T)
+# Exp2.df <- read.csv('../IPET2_fulldata_N=40.csv', header = T)
 ## Impute PNRQ Component scores into the main data set 
-start <- 1; PNRQ_n <- 1
-for (x in seq(32, 1200, by = 32)){
-  Exp2.df$Belief_C[start:x] <- rep(Exp2.PNQR$Belief_C[PNRQ_n], 32)
-  Exp2.df$Reciprocity_Neg_C[start:x] <- rep(Exp2.PNQR$Reciprocity_Neg_C[PNRQ_n], 32)
-  Exp2.df$Reciprocity_Pos_C[start:x] <- rep(Exp2.PNQR$Reciprocity_Pos_C[PNRQ_n], 32)
-  start <- x + 1;PNRQ_n <- PNRQ_n + 1
-}
-Exp2.df <- Exp2.df %>% 
-              # Remove missing data
-              filter(complete.cases(Condition)) %>%
-              # Recode condition variable
-              mutate(Condition = recode(Condition, '0' = 'Conceptual', '1' = 'Imagine'),
-                     Condition = relevel(as.factor(Condition), ref = 'Conceptual'),
-                     # Convert scenario ID to factors
-                     Story_ID = as.factor(Story_ID),
-                     # Create dummy variables
-                     dummy_img = as.numeric(Condition == 'Imagine'),
-                     # Within-cluster centering
-                     Coherence_C = group_center(Coherence, participant),
-                     Detail_C = group_center(Detail, participant),
-                     Help_C = group_center(Help, participant),
-                     Trust_C = group_center (Trust, participant),
-                     imgdet_int = dummy_img*Detail_C,
-                     imgcoh_int = dummy_img*Coherence_C)
+# start <- 1; PNRQ_n <- 1
+# for (x in seq(32, 1200, by = 32)){
+#   Exp2.df$Belief_C[start:x] <- rep(Exp2.PNQR$Belief_C[PNRQ_n], 32)
+#   Exp2.df$Reciprocity_Neg_C[start:x] <- rep(Exp2.PNQR$Reciprocity_Neg_C[PNRQ_n], 32)
+#   Exp2.df$Reciprocity_Pos_C[start:x] <- rep(Exp2.PNQR$Reciprocity_Pos_C[PNRQ_n], 32)
+#   start <- x + 1;PNRQ_n <- PNRQ_n + 1
+# }
+# Exp2.df <- Exp2.df %>% 
+#               # Remove missing data
+#               filter(complete.cases(Condition)) %>%
+#               # Recode condition variable
+#               mutate(Condition = recode(Condition, '0' = 'Conceptual', '1' = 'Imagine'),
+#                      Condition = relevel(as.factor(Condition), ref = 'Conceptual'),
+#                      # Convert scenario ID to factors
+#                      Story_ID = as.factor(Story_ID),
+#                      # Create dummy variables
+#                      dummy_img = as.numeric(Condition == 'Imagine'),
+#                      # Within-cluster centering
+#                      Coherence_C = group_center(Coherence, participant),
+#                      Detail_C = group_center(Detail, participant),
+#                      Help_C = group_center(Help, participant),
+#                      Trust_C = group_center (Trust, participant),
+#                      imgdet_int = dummy_img*Detail_C,
+#                      imgcoh_int = dummy_img*Coherence_C)
+
+# Models
+load('Exp2.Rdata')
 ```
 
 ## Determine if clustering exist for story ID and participants for thee two DV
 ```{r}
-# Help
-(VE2.1 <- ranova(lmer(Help ~ (1|participant) + (1|Story_ID), data = Exp2.df)))
+# Willingness to help -- Model: ranova(lmer(Help ~ (1|participant) + (1|Story_ID), data = Exp2.df)
+VE2.1
 #---------------------------------------------------------------------------------------------------------------
-# Trust 
-(VE1.2 <- ranova(lmer(Trust ~ (1|participant) + (1|Story_ID), data = Exp2.df)))
-
-# Determine if ordering of help and trust rating matters
-summary(lmer(Help ~ help_trust + (1|participant) + (1|Story_ID), data = Exp2.df))
-summary(lmer(Trust ~ help_trust + (1|participant) + (1|Story_ID), data = Exp2.df))
+# Trust -- Model: ranova(lmer(Trust~ (1|participant) + (1|Story_ID), data = Exp2.df)
+VE2.2
 ```
-### PSE in willingness to help and trust towards the person in need
+## PSE in willingness to help and trust towards the person in need
 ```{r}
 # Willingness to help
 ## Parsimonious model: lmer(Help ~ Condition + (dummy_img|participant) + (1|Story_ID), data = IPET2.df)
-help_exp2 <- lmer(Help ~ Condition + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
 ## F-test with Kenward-Roger approximation of degress of freedom
 anova(help_exp2, ddf = 'Kenward-Roger')
 ## Effect Size
 r.squaredGLMM(help_exp2)
 ## Post hoc comparisons
-posthoc_help2 <- emmeans(help_exp2, pairwise ~ Condition, adjust = 'bonferroni') #####
 posthoc_help2
 confint(posthoc_help2)
 #---------------------------------------------------------------------------------------------------------------
 # Trust
 # Parsimonious model: lmer(Trust ~ Condition + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-trust_exp2 <- lmer(Trust ~ Condition + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
 ## F-test with Kenward-Roger approximation of degress of freedom
 anova(trust_exp2, ddf = 'Kenward-Roger')
 ## Effect Size
 r.squaredGLMM(trust_exp2)
 ## Post hoc comparisons
-posthoc_trust2 <- emmeans(trust_exp2, pairwise ~ Condition, adjust = 'bonferroni') #####
 posthoc_trust2
 confint(posthoc_trust2)
 ```
@@ -514,7 +315,8 @@ ggplot(means_help2, aes(x = Conditions, y = emmean)) +
     expand_limits(y = c(1, 7)) + 
     scale_y_discrete(limits = c(1,2,3,4,5,6,7)) +
     theme_classic() +
-    scale_x_discrete(labels = c("Conceptual Helping", "Imagine Helping"))
+    scale_x_discrete(limits = c("Imagine", "Conceptual"),
+                     labels = c("Imagine Helping", "Conceptual Helping"))
 #------------------------------------------------------------------------------------------------------------------------
 # Trust
 means_trust2 <- data.frame(posthoc_trust2$emmeans)
@@ -529,30 +331,27 @@ ggplot(means_trust2, aes(x = Conditions, y = emmean)) +
     expand_limits(y = c(1, 7)) + 
     scale_y_discrete(limits = c(1,2,3,4,5,6,7)) +
     theme_classic() +
-    scale_x_discrete(labels = c("Conceptual Helping", "Imagine Helping"))
+    scale_x_discrete(limits = c("Imagine", "Conceptual"),
+                     labels = c("Imagine Helping", "Conceptual Helping"))
 ```
 
 
 ## Vividness by condition interactions
 ### Willingness to help
 ```{r}
-# Detail -- Parsimonious model: lmer(Help ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (0 + dummy_img:Detail_C|participant) + (Detail_C|Story_ID), data = Exp2.df)
-help_det_exp2 <- lmer(Help ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (0 + dummy_img:Detail_C|participant) + (Detail_C|Story_ID), data = Exp2.df)
-help_det_exp2 <- refit_LMM(help_det_exp2) #3 refits
-
-# Confidence intervals
-confint(help_det_exp2, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
+# Detail -- Parsimonious model: lmer(Help ~ Condition*Detail_C + (dummy_img + Detail_C|participant) + (0 + dummy_img:Detail_C|participant) + (0 + dummy_img:Detail_C|Story_ID), data = Exp2.df)
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(help_det_exp2, ddf = 'Kenward-Roger'); summary(help_det_exp2)
+# Confidence intervals
+confint(help_det_exp2, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # Effect Size
 r.squaredGLMM(help_det_exp2)
 #------------------------------------------------------------------------------------------------------------------------
 # Coherence -- Parsimonious model: lmer(Help ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (0 + dummy_img:Coherence_C|participant) + (1|Story_ID), data = Exp2.df)
-help_coh_exp2 <- lmer(Help ~ Condition*Coherence_C + (dummy_img + Coherence_C|participant) + (0 + dummy_img:Coherence_C|participant) + (1|Story_ID), data = Exp2.df)
-# Confidence intervals
-confint(help_coh_exp2, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(help_coh_exp2, ddf = 'Kenward-Roger'); summary(help_coh_exp2)
+# Confidence intervals
+confint(help_coh_exp2, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # Effect Size
 r.squaredGLMM(help_coh_exp2)
 ```
@@ -560,21 +359,18 @@ r.squaredGLMM(help_coh_exp2)
 ### Trust 
 ```{r}
 # Detail -- Parsimonious model: lmer(Trust ~ Condition*Detail_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-trust_det_exp2 <- lmer (Trust ~ Condition*Detail_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df) 
-trust_det_exp2 <- refit_LMM(trust_fm_det)
-# Confidence intervals
-confint(trust_det_exp2, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(trust_det_exp2, ddf = 'Kenward-Roger'); summary(trust_det_exp2)
+# Confidence intervals
+confint(trust_det_exp2, c("ConditionImagine", "Detail_C", "ConditionImagine:Detail_C"))
 # Effect Size
 r.squaredGLMM(trust_det_exp2)
 #------------------------------------------------------------------------------------------------------------------------
 # Coherence -- Parsimonious model: lmer(Trust ~ Condition*Coherence_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-trust_coh_exp2 <- lmer(Trust ~ Condition*Coherence_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-# Confidence intervals
-confint(trust_coh_exp2, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(trust_coh_exp2, ddf = 'Kenward-Roger'); summary(trust_coh_exp2)
+# Confidence intervals
+confint(trust_coh_exp2, c("ConditionImagine", "Coherence_C", "ConditionImagine:Coherence_C"))
 # Effect Size
 r.squaredGLMM(trust_coh_exp2)
 ```
@@ -591,7 +387,6 @@ det_help_plot2 <- int_plot(plot_det_help2, DV_name = 'Willingness to help', x_na
 plot_coh_help2 <- ggpredict(help_coh_exp2, c("Coherence_C[-4, 0, 4]", "Condition"))
 coh_help_plot2 <- int_plot(plot_coh_help2, DV_name = 'Willingness to help', x_name = 'Coherence', 
                            palette = c(palette[2], palette[3])) +
-                           theme(legend.position = "none") +
                            ylab('')
 
 grid.arrange(det_help_plot2, coh_help_plot2, ncol = 2)
@@ -607,7 +402,6 @@ det_trust_plot2 <- int_plot(plot_det_trust2, DV_name = 'Trust', x_name = 'Detail
 plot_coh_trust2 <- ggpredict(trust_coh_exp2, c("Coherence_C[-4, 0, 4]", "Condition"))
 coh_trust_plot2 <- int_plot(plot_coh_trust2, DV_name = 'Trust', x_name = 'Coherence', 
                             palette = c(palette[2], palette[3])) +
-                            theme(legend.position = "none") +
                             ylab('')
 
 grid.arrange(det_trust_plot2, coh_trust_plot2, ncol = 2)
@@ -618,269 +412,75 @@ grid.arrange(det_trust_plot2, coh_trust_plot2, ncol = 2)
 ```{r}
 # Path a
 ## Model: lmer(Help ~ dummy_img + (dummy_img|participant), data = Exp2.df)
-med.fit_exp2 <- lmer(Help ~ dummy_img + (dummy_img|participant), data = Exp2.df)
 summary(med.fit_exp2)
 # Path b and c'
 ## Model: lmer(Trust ~ dummy_img + Help_C + (dummy_img + Help_C|participant), data = Exp2.df)
-out.fit_exp2 <- lmer(Trust ~ dummy_img + Help_C + (dummy_img + Help_C|participant), data = Exp2.df)
 summary(out.fit_exp2)
 #------------------------------------------------------------------------------------------------------------------------
 # Mediaton models
 ## Conceeptual vs Imagine
-set.seed(67); med.out_exp2 <- mediate (med.fit_0v1_exp2, out.fit_0v1_exp2, 
+set.seed(67); med.out_exp2 <- mediate (med.fit_exp2, out.fit_exp2, 
                                            treat = 'dummy_img', mediator = 'Help_C', sims = 1e5)
 summary(med.out_exp2)
 ```
 
-
-# Multilevel moderated mediation 
-## Vividness -> Help -> Trust
-```{r}
-library(lmerTest)
-detach (package:lmerTest, unload=T)
-#------------------------------------------------------------------------------------------------------------------------
-# Detail -- Models:
-## Path a: lmer(Help ~ dummy_img*Detail_C + (dummy_img + imgdet_int|participant), data = Exp2.df)  
-med.fit_DH_exp2 <- lmer(Help ~ dummy_img*Detail_C + (dummy_img + imgdet_int|participant), data = Exp2.df)  
-## Path b and c': lmer(Trust ~ dummy_img*(Detail_C + Help_C) + (dummy_img + Help_C|participant), data = Exp2.df)
-out.fit_DH_exp2 <- lmer(Trust ~ dummy_img*(Detail_C + Help_C) + (dummy_img + Help_C|participant), data = Exp2.df)
-
-summary(out.fit_DH_exp2)
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgDH_exp2 <- mediate(med.fit_DH_exp2, out.fit_DH_exp2,
-                                            covariates = list(dummy_img = 1), treat = "Detail_C", mediator = "Help_C", 
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estDH_exp2 <- mediate(med.fit_DH_exp2, out.fit_DH_exp2, 
-                                            covariates = list(dummy_img = 0), treat = "Detail_C", mediator = "Help_C", 
-                                            sims = 1e5)
-summary(Mod.Med_estDH_exp2); summary(Mod.Med_imgDH_exp2)
-
-# Used to plot paths a & b for each condition 
-est_DHa_exp2 <- lmer(Help ~ Detail_C + (Detail_C|participant), data = subset(Exp2.df, Condition == 'Conceptual')) 
-img_DHa_exp2 <- lmer(Help ~ Detail_C + (Detail_C|participant), data = subset(Exp2.df, Condition == 'Imagine')) 
-est_DHb_exp2 <- lmer(Trust ~ Detail_C + Help_C + (Detail_C + Help_C|participant),
-                     data = subset(Exp2.df, Condition == 'Conceptual')) 
-est_DHb_exp2 <- refit_LMM(est_DHb_exp2)
-img_DHb_exp2 <- lmer(Trust ~ Detail_C + Help_C + (Detail_C|participant), data = subset(Exp2.df, Condition == 'Imagine'))
-summary(est_DHa_exp2); summary(est_DHb_exp2); summary(img_DHa_exp2); summary(img_DHb_exp2)
-#------------------------------------------------------------------------------------------------------------------------
-# Coherence -- Models:
-## Path a: lmer(Help ~ dummy_img*Coherence_C + (dummy_img + imgcoh_int|participant), data = Exp2.df) 
-med.fit_CH_exp2 <- lmer(Help ~ dummy_img*Coherence_C + (dummy_img + imgcoh_int|participant), data = Exp2.df)
-## Path b and c': 
-out.fit_CH_exp2 <- lmer(Trust ~ dummy_img*(Coherence_C + Help_C) + (dummy_img + Coherence_C + Help_C|participant),
-                        data = Exp2.df)
-out.fit_CH_exp2 <- refit_LMM(out.fit_CH_exp2)
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgCH_exp2 <- mediate(med.fit_CH_exp2, out.fit_CH_exp2,
-                                            covariates = list(dummy_img = 1), treat = "Coherence_C", mediator="Help_C",
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estCH_exp2 <- mediate(med.fit_CH_exp2, out.fit_CH_exp2, 
-                                            covariates = list(dummy_img = 0), treat = "Coherence_C", mediator = "Help_C",
-                                            sims = 1e5)
-summary(Mod.Med_estCH_exp2); summary(Mod.Med_imgCH_exp2)
-
-# Used to plot paths a & b for each condition 
-est_CHa_exp2 <- lmer(Help ~ Coherence_C + (Coherence_C|participant),
-                     data = subset(Exp2.df, Condition == 'Conceptual')) 
-img_CHa_exp2 <- lmer(Help ~ Coherence_C + (Coherence_C|participant), data = subset(Exp2.df, Condition == 'Imagine')) 
-est_CHb_exp2 <- lmer(Trust ~ Coherence_C + Help_C + (Coherence_C + Help_C|participant),
-                      data = subset(Exp2.df, Condition == 'Conceptual'))
-est_CHb_exp2 <- refit_LMM(est_CHb_exp2)
-img_CHb_exp2 <- lmer(Trust ~ Coherence_C + Help_C + (Help_C|participant), 
-                     data = subset(Exp2.df, Condition == 'Imagine'))
-summary(est_CHa_exp2); summary(est_CHb_exp2); summary(img_CHa_exp2); summary(img_CHb_exp2)
-```
-
-### Plot: Figure...
-```{r}
-# Generate data file for ploting 
-medmod_H_exp2.df <- cbind.data.frame("Vividness" = c('Detail', 'Detail', 'Coherence', 'Coherence'),
-                                     "Condition" = c("Imagine Helping", 
-                                                     "Conceptual Helping",
-                                                     "Imagine Helping", 
-                                                     "Conceptual Helping"), 
-                                     "IE" = c(Mod.Med_imgDH_exp2$d0, 
-                                              Mod.Med_estDH_exp2$d0, 
-                                              Mod.Med_imgCH_exp2$d0, 
-                                              Mod.Med_estCH_exp2$d0),
-                                     "l_CI" = c(Mod.Med_imgDH_exp2$d0.ci[1], 
-                                                Mod.Med_estDH_exp2$d0.ci[1], 
-                                                Mod.Med_imgCH_exp2$d0.ci[1], 
-                                                Mod.Med_estCH_exp2$d0.ci[1]), 
-                                     "u_CI" = c(Mod.Med_imgDH_exp2$d0.ci[2], 
-                                                Mod.Med_estDH_exp2$d0.ci[2], 
-                                                Mod.Med_imgCH_exp2$d0.ci[2], 
-                                                Mod.Med_estCH_exp2$d0.ci[2]))
-
-# Detail
-medmod_detH_plot2 <- medmod_plot(subset(medmod_H_exp2.df, Vividness == 'Detail'))
-# Coherence
-medmod_cohH_plot2 <- medmod_plot(subset(medmod_H_exp2.df, Vividness == 'Coherence'))
-
-grid.arrange(medmod_detH_plot2 + xlim(0, 0.3), medmod_cohH_plot2 + xlim(0, 0.3), ncol = 2)
-```
-## Vividness -> Trust -> Help
-```{r}
-library(lmerTest)
-detach (package:lmerTest, unload = T)
-#----------------------------------------------------------------------------------------------------------------------------
-# Detail -- Models:
-## Path a: lmer(Trust ~ dummy_img*Detail_C + (dummy_img|participant), data = Exp2.df) 
-med.fit_DT_exp2 <- lmer(Trust ~ dummy_img*Detail_C + (dummy_img|participant), data = Exp2.df) 
-## Path b and c': lmer(Help ~ dummy_img*(Detail_C + Trust_C) + (dummy_img + Detail_C + Trust_C|participant), data = Exp2.df)
-out.fit_DT_exp2 <- lmer(Help ~ dummy_img*(Detail_C + Trust_C) + (dummy_img + Detail_C + Trust_C|participant), 
-                        data = Exp2.df)
-out.fit_DT_exp2 <- refit_LMM(out.fit_DT_exp2)
-
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgDT_exp2 <- mediate(med.fit_DT_exp2, out.fit_DT_exp2,
-                                            covariates = list(dummy_img = 1), treat = "Detail_C", mediator = "Trust_C",
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estDT_exp2 <- mediate(med.fit_DT_exp2, out.fit_DT_exp2, 
-                                            covariates = list(dummy_img = 0), treat = "Detail_C", mediator = "Trust_C",
-                                            sims = 1e5)
-summary(Mod.Med_estDT_exp2); summary(Mod.Med_imgDT_exp2)
-#
-# Used to plot paths a & b for each condition 
-est_DTa_exp2 <- lmer(Trust ~ Detail_C + (Detail_C|participant), data = subset(Exp2.df, Condition == 'Conceptual')) 
-img_DTa_exp2 <- lmer(Trust ~ Detail_C + (Detail_C|participant), data = subset(Exp2.df, Condition == 'Imagine'))  
-img_DTa_exp2 <- refit_LMM(img_DTa_exp2)
-est_DTb_exp2 <- lmer(Help ~ Detail_C + Trust_C + (Trust_C|participant), 
-                     data = subset(Exp2.df, Condition == 'Conceptual'))
-img_DTb_exp2 <- lmer(Help ~ Detail_C + Trust_C + (Detail_C + Trust_C|participant), 
-                     data = subset(Exp2.df, Condition == 'Imagine'))
-summary(est_DTa_exp2); summary(est_DTb_exp2); summary(img_DTa_exp2); summary(img_DTb_exp2)
-#----------------------------------------------------------------------------------------------------------------------------
-# Coherence -- Models:
-## Path a: lmer (Trust ~ dummy_img*Coherence_C + (dummy_img + Coherence_C|participant), data = Exp2.df)
-med.fit_CT_exp2 <- lmer (Trust ~ dummy_img*Coherence_C + (dummy_img + Coherence_C|participant), data = Exp2.df)
-## Path b and c':lmer (Help ~ dummy_img*(Coherence_C + Trust_C) + (dummy_img + Coherence_C + Trust_C|participant), data = Exp2.df)
-out.fit_CT_exp2 <- lmer (Help ~ dummy_img*(Coherence_C + Trust_C) + (dummy_img + Coherence_C + Trust_C|participant),
-                         data = Exp2.df)
-
-# Mediaton models
-## Imagine helping
-set.seed(67); Mod.Med_imgCT_exp2 <- mediate(med.fit_CT_exp2, out.fit_CT_exp2,
-                                            covariates = list(dummy_img = 1), treat = "Coherence_C", mediator = "Trust_C",
-                                            sims = 1e5)
-## Conceptual helping 
-set.seed(67); Mod.Med_estCT_exp2 <- mediate(med.fit_CT_exp2, out.fit_CT_exp2, 
-                                            covariates = list(dummy_img = 0), treat = "Coherence_C", mediator = "Trust_C",
-                                            sims = 1e5)
-summary(Mod.Med_estCT_exp2); summary(Mod.Med_imgCT_exp2)
-
-# Used to plot paths a & b for each condition 
-est_CTa_exp2 <- lmer(Trust ~ Coherence_C + (1|participant), data = subset(Exp2.df, Condition == 'Conceptual')) 
-img_CTa_exp2 <- lmer(Trust ~ Coherence_C + (1|participant),data = subset(Exp2.df, Condition == 'Imagine')) 
-est_CTb_exp2 <- lmer(Help ~ Coherence_C + Trust_C + (Trust_C|participant), data = subset(Exp2.df, Condition == 'Conceptual'))
-est_CTb_exp2 <- refit_LMM(est_CTb_exp2)
-img_CTb_exp2 <- lmer(Help ~ Coherence_C + Trust_C + (1|participant), data = subset(Exp2.df, Condition == 'Imagine'))
-
-summary(est_CTa_exp2); summary(est_CTb_exp2); summary(img_CTa_exp2); summary(img_CTb_exp2)
-```
-### Plot: Figure...
-```{r}
-# Generate data file for ploting 
-medmod_T_exp2.df <- cbind.data.frame("Vividness" = c('Detail', 'Detail', 'Coherence', 'Coherence'),
-                                     "Condition" = c("Imagine Helping", 
-                                                     "Conceptual Helping",
-                                                     "Imagine Helping", 
-                                                     "Conceptual Helping"), 
-                                     "IE" = c(Mod.Med_imgDT_exp2$d0, 
-                                              Mod.Med_estDT_exp2$d0, 
-                                              Mod.Med_imgCT_exp2$d0, 
-                                              Mod.Med_estCT_exp2$d0),
-                                     "l_CI" = c(Mod.Med_imgDT_exp2$d0.ci[1], 
-                                                Mod.Med_estDT_exp2$d0.ci[1], 
-                                                Mod.Med_imgCT_exp2$d0.ci[1], 
-                                                Mod.Med_estCT_exp2$d0.ci[1]), 
-                                     "u_CI" = c(Mod.Med_imgDT_exp2$d0.ci[2], 
-                                                Mod.Med_estDT_exp2$d0.ci[2], 
-                                                Mod.Med_imgCT_exp2$d0.ci[2], 
-                                                Mod.Med_estCT_exp2$d0.ci[2]))
-
-# Detail
-medmod_detT_plot2 <- medmod_plot(subset(medmod_T_exp2.df, Vividness == 'Detail'))
-# Coherence
-medmod_cohT_plot2 <- medmod_plot(subset(medmod_T_exp2.df, Vividness == 'Coherence')) 
-                               
-
-grid.arrange(medmod_detT_plot2 + xlim(0, 0.2), medmod_cohT_plot2 + xlim(0, 0.2), ncol = 2)
-```
-
-
-## Cross-level interactions: PNRQ
+# Cross-level interactions: PNRQ
 ```{r}
 # Belief -- Model: lmer(Trust ~ Condition*Belief_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-belief <- lmer(Trust ~ Condition*Belief_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-# Confidence intervals
-confint(belief, c("ConditionImagine", "Belief_C", "ConditionImagine:Belief_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(belief, ddf = 'Kenward-Roger'); summary(belief)
+# Confidence intervals
+confint(belief, c("ConditionImagine", "Belief_C", "ConditionImagine:Belief_C"))
 # Effect Size
 r.squaredGLMM(belief)
-
-emtrends(belief, pairwise ~ Condition, var = 'Belief_C')
-
-
-sd <- sd(Exp2.PNQR$Belief_C)
-m <- mean(Exp2.PNQR$Belief_C)
-m - sd; m; m + sd
-# plots
-ggpredict(belief, c("Belief_C [-1.16, 0, 1.16]", "Condition"))%>% plot() +
-  theme_classic() +
-  labs(title = "", x="Belief in reciprocity", y = "Trust") 
-  #scale_color_manual(values = c(palette[3], palette[4])) 
-                     #labels = c("Imagine helping", "Conceptual helping")) 
 #------------------------------------------------------------------------------------------------------------------------
 # Positive reciprocity -- Model: lmer(Trust ~ Condition*Reciprocity_Pos_C + (dummy_img|participant) + (dummy_img:Reciprocity_Pos_C|Story_ID), data = Exp2.df)
-pos_recip <- lmer(Trust ~ Condition*Reciprocity_Pos_C + (dummy_img|participant) + (dummy_img:Reciprocity_Pos_C|Story_ID),
-                  data = Exp2.df)
-# Confidence intervals
-confint(pos_recip, c("ConditionImagine", "Reciprocity_Pos_C", "ConditionImagine:Reciprocity_Pos_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(pos_recip, ddf = 'Kenward-Roger'); summary(pos_recip)
+# Confidence intervals
+confint(pos_recip, c("ConditionImagine", "Reciprocity_Pos_C", "ConditionImagine:Reciprocity_Pos_C"))
 # Effect Size
 r.squaredGLMM(pos_recip)
-
-emtrends(pos_recip, pairwise ~ Condition, var = 'Reciprocity_Pos_C')
-
-
-ggpredict(pos_recip, c("Reciprocity_Pos_C", "Condition"))%>% plot() +
-  theme_classic() +
-  labs(title = "", x="Positive Reciprocity", y = "Trust") 
 #-----------------------------------------------------------------------------------------------------------------------
 # Negative reciprocity -- Model: lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.df)
-neg_recip <- lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (1|Story_ID), data = Exp2.d f)
-neg_recip <- refit_LMM(neg_recip)
-# Confidence intervals
-confint(neg_recip, c("ConditionImagine", "Reciprocity_Neg_C", "ConditionImagine:Reciprocity_Neg_C"))
 # F-test using Kenward-Roger approximation of degress of freedom
 anova(neg_recip, ddf = 'Kenward-Roger'); summary(neg_recip)
+# Confidence intervals
+confint(neg_recip, c("ConditionImagine", "Reciprocity_Neg_C", "ConditionImagine:Reciprocity_Neg_C"))
 # Effect Size
 r.squaredGLMM(neg_recip)
-emtrends(neg_recip, pairwise ~ Condition, var = 'Reciprocity_Neg_C')
 ```
-
-#### Power
+### Plots and power analyses: Figure....
 ```{r}
-library (simr)
-m1 <- extend(belief, along = 'participant', n = 150)
-set.seed(67); pcurve_belief <- powerCurve(m1, test = fcompare(Trust ~ Condition + Belief_C), along = 'participant')
-plot(pcurve_belief)
-set.seed(67); power_belief <- powerSim(belief, test = fcompare(Trust ~ Condition + Belief_C, method = 'kr'))
+# Belief in reciprocity
+ggpredict(belief, c("Condition", "Belief_C [-1.16, 0, 1.16]")) %>% plot() +
+  theme_classic() +
+  labs(title = "", y = "Trust", colour = "Belief in reciprocity") +
+  scale_colour_brewer(palette = "Set1", labels = c("-1SD", "Mean", "+1SD")) +
+  scale_x_discrete(limits = c("Conceptual helping", "Imagine helping"))
 
-m2 <- extend(pos_recip, along = 'participant', n = 150)
-set.seed(67); pcurve_posrecip <- powerCurve(m2, test = fcompare(Trust ~ Condition + Reciprocity_Pos_C), along = 'participant')
+# Power analysis:
+# m1 <- extend(belief, along = 'participant', n = 150)
+# set.seed(67); pcurve_belief <- powerCurve(m1, test = fcompare(Trust ~ Condition + Belief_C), along = 'participant')
+# set.seed(67); power_belief <- powerSim(belief, test = fcompare(Trust ~ Condition + Belief_C, method = 'kr'))
+power_belief
+## Power curve
+plot(pcurve_belief)
+#-------------------------------------------------------------------------------------------------
+# Positive reciprocity
+ggpredict(pos_recip, c("Condition", "Reciprocity_Pos_C [-1.15, 0, 1.15]")) %>% plot() +
+  theme_classic() +
+  labs(title = "", y = "Trust", colour = "Positive reciprocity") +
+  scale_colour_brewer(palette = "Set1", labels = c("-1SD", "Mean", "+1SD")) +
+  scale_x_discrete(limits = c("Conceptual helping", "Imagine helping")) 
+
+# Power analysis
+# m2 <- extend(pos_recip, along = 'participant', n = 150)
+# set.seed(67); pcurve_posrecip <- powerCurve(m2, test = fcompare(Trust ~ Condition + Reciprocity_Pos_C), along = 'participant')
+# set.seed(67); power_posrecip <- powerSim(pos_recip, test = fcompare(Trust ~ Condition + Reciprocity_Pos_C, method = 'kr'))
+power_posrecip
+## Power curve
 plot(pcurve_posrecip)
-set.seed(67); power_posrecip <- powerSim(pos_recip, test = fcompare(Trust ~ Condition + Reciprocity_Pos_C, method = 'kr'))
 ```
 
 
